@@ -1,3 +1,3 @@
 # Inference Practice
 
-Code exploring inferences using pyro or PyMC3.
+Code exploring Baysian inference using Pyro AI or PyMC3.
