@@ -2,6 +2,7 @@ import logging
 import math
 
 import numpy as np
+from scipy import stats
 
 
 def get_logger(log_file):
@@ -28,12 +29,43 @@ class Pmf(object):
         self.log = False
         if values is None:
             return
-        self.init_sequence(values)
-        self.normalize()
+
+        init_methods = [
+            self.init_pmf,
+            self.init_mapping,
+            self.init_sequence,
+            self.init_failure,
+        ]
+
+        for method in init_methods:
+            try:
+                method(values)
+                break
+            except AttributeError:
+                continue
+
+        if len(self) > 0:
+            self.normalize()
 
     def get_items(self):
         """Gets an unsorted sequence of (value, freq/prob) pairs."""
         return self.d.items()
+
+    def init_mapping(self, values):
+        """Initializes with a map from value to probability.
+
+        values: map from value to probability
+        """
+        for value, prob in values.iteritems():
+            self.set(value, prob)
+
+    def init_pmf(self, values):
+        """Initializes with a Pmf.
+
+        values: Pmf object
+        """
+        for value, prob in values.items():
+            self.set(value, prob)
 
     def init_sequence(self, values):
         """Initializes with a sequence of equally-likely values.
@@ -42,6 +74,11 @@ class Pmf(object):
         """
         for value in values:
             self.set(value, 1)
+
+
+    def init_failure(self, values):
+        """Raises an error."""
+        raise ValueError('None of the initialization methods worked.')
 
     def sample(self, n):
         """Generates a random sample from this distribution.
@@ -132,6 +169,25 @@ class Pmf(object):
 
         return total
 
+    def update_set(self, dataset):
+        """Updates each hypothesis based on the dataset.
+
+        This is more efficient than calling Update repeatedly because
+        it waits until the end to Normalize.
+
+        Modifies the suite directly; if you want to keep the original, make
+        a copy.
+
+        dataset: a sequence of data
+
+        returns: the normalizing constant
+        """
+        for data in dataset:
+            for hypo in self.values():
+                like = self.likelihood(data, hypo)
+                self.mult(hypo, like)
+        return self.normalize()
+
     def update(self, data):
         """Updates each hypothesis based on the data.
 
@@ -187,4 +243,60 @@ class Pmf(object):
         self.d = new_d
 
     def log_prob(self, x):
-        return np.array(self.prob(x))
+        ar = np.array(self.prob(x))
+        return ar
+
+    def __len__(self):
+        return len(self.d)
+
+    def __iter__(self):
+        return iter(self.d)
+
+    def iterkeys(self):
+        return iter(self.d)
+
+    def __contains__(self, value):
+        return value in self.d
+
+
+def eval_gaussian_pdf(x, mu, sigma):
+    """Computes the unnormalized PDF of the normal distribution.
+
+    x: value
+    mu: mean
+    sigma: standard deviation
+
+    returns: float probability density
+    """
+    return stats.norm.pdf(x, mu, sigma)
+
+
+def make_gaussian_pmf(mu, sigma, num_sigmas, n=201):
+    """Makes a PMF discrete approx to a Gaussian distribution.
+
+    mu: float mean
+    sigma: float standard deviation
+    num_sigmas: how many sigmas to extend in each direction
+    n: number of values in the Pmf
+
+    returns: normalized Pmf
+    """
+    pmf = Pmf()
+    low = mu - num_sigmas * sigma
+    high = mu + num_sigmas * sigma
+
+    for x in np.linspace(low, high, n):
+        p = eval_gaussian_pdf(x, mu, sigma)
+        pmf.set(x, p)
+    pmf.normalize()
+    return pmf
+
+def eval_poisson_pmf(k, lam):
+    """Computes the Poisson PMF.
+
+    k: number of events
+    lam: parameter lambda in events per unit time
+
+    returns: float probability
+    """
+    return stats.poisson.pmf(k, lam)

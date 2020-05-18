@@ -9,7 +9,7 @@ import torch.distributions.constraints as constraints
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import ClippedAdam
 
-from src.pratice.utils import Pmf
+from src.practice.utils import Pmf
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
